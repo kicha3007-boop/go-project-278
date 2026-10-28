@@ -1,0 +1,67 @@
+# Локальный запуск «как на Render»: Postgres + образ приложения (Caddy + Go).
+#   docker compose up --build                       — приложение на http://localhost:8090
+#   docker compose --profile monitoring up --build  — плюс Bugsink на http://localhost:8000
+# Значения по умолчанию годятся только для локальной машины; переопределяются в .env.
+name: go-url-shortener
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shortener}
+      POSTGRES_USER: ${POSTGRES_USER:-shortener}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shortener}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      # Вторая база — для тестов (make test), чтобы они не трогали данные приложения.
+      - ./docker/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+    ports:
+      # Наружу только на localhost — для make start / make dev / make test на хосте.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  app:
+    build: .
+    image: go-url-shortener:local
+    environment:
+      PORT: 80
+      DATABASE_URL: postgres://${POSTGRES_USER:-shortener}:${POSTGRES_PASSWORD:-shortener}@db:5432/${POSTGRES_DB:-shortener}?sslmode=disable
+      BASE_URL: ${APP_BASE_URL:-http://localhost:8090}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      APP_ENV: ${APP_ENV:-local-docker}
+      ENABLE_DEBUG_ROUTES: ${ENABLE_DEBUG_ROUTES:-false}
+    ports:
+      - "${APP_PORT:-8090}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Локальный Bugsink вместо облачного: принимает события Sentry SDK.
+  bugsink:
+    image: bugsink/bugsink:2.6.2
+    profiles: ["monitoring"]
+    environment:
+      SECRET_KEY: ${BUGSINK_SECRET_KEY:-local-only-bugsink-secret-key-change-me-0123456789abcdef}
+      # Формат «email:пароль»; учётка только для локального стенда.
+      CREATE_SUPERUSER: ${BUGSINK_ADMIN:-admin@example.com:admin}
+      PORT: 8000
+      BASE_URL: http://localhost:${BUGSINK_PORT:-8000}
+      PHONEHOME: "false"
+    volumes:
+      - bugsink-data:/data
+    ports:
+      - "127.0.0.1:${BUGSINK_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
+  bugsink-data:

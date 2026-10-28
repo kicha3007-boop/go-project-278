@@ -1,0 +1,8 @@
+/bin/app
+/bin/*.exe
+*.test
+*.out
+node_modules/
+.env
+.idea/
+.vscode/

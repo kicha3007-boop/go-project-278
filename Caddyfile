@@ -1,0 +1,29 @@
+{
+	# Конфиг только из файла, без admin API и без автоматического HTTPS:
+	# TLS снаружи завершает Render (или никто, если запуск локальный).
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$PORT:80} {
+	encode gzip
+
+	# API, короткие ссылки и проверка живости уходят в приложение с исходным путём.
+	@backend path /api/* /r/* /ping
+	handle @backend {
+		reverse_proxy 127.0.0.1:{$BACKEND_PORT:8080}
+	}
+
+	# Всё остальное — собранный UI; неизвестные пути отдают index.html.
+	handle {
+		root * /app/public
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

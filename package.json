@@ -1,0 +1,12 @@
+{
+  "name": "go-url-shortener-ui",
+  "private": true,
+  "description": "UI сокращателя ссылок: готовый пакет Хекслета и concurrently для make dev",
+  "scripts": {
+    "frontend": "start-hexlet-url-shortener-frontend"
+  },
+  "dependencies": {
+    "@hexlet/project-url-shortener-frontend": "^1.0.0",
+    "concurrently": "^9.2.1"
+  }
+}
